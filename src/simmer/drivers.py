@@ -17,7 +17,7 @@ from . import summarize as summarize
 
 def all_driver(
 
-    inst, config_file, raw_dir, reddir, sep_skies = False, plotting_yml=None, searchsize=10, just_images=False, selected_stars=None, verbose=True
+    inst, config_file, raw_dir, reddir, sep_skies = False, plotting_yml=None, searchsize=10, just_images=False, selected_stars=None, verbose=False
 
 ):
     """
@@ -69,7 +69,6 @@ def all_driver(
         if ob in star_dir
     ]
     miter=0
-    print('methods: ', methods)
     for i, s_dir in enumerate(
         tqdm(
             np.unique(cleaned_star_dirlist),
@@ -78,8 +77,6 @@ def all_driver(
             leave=True,
         )
     ):
-        print('searchsize: ', searchsize)
-        print('s_dir: ', s_dir)
         if selected_stars != None:
             thisstar = os.path.basename(s_dir[:-1])
             print('this star: ', thisstar)

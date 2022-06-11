@@ -106,15 +106,26 @@ def analyze(filename=filename, maxiter = 10, postol=1, fwhmtol = 0.5, inst = 'Sh
     #Save sources to file
     updated_sources.to_csv(outdir+'detected_stars.csv', index=False)
 
-    #Make contrast curve
+    #Make contrast curve (both regular & highres)
+    for hh in np.arange(2):
+        if hh == 0:
+            highres = False
+            highrestag = ''
+        else:
+            highres = True
+            highrestag = '_highres'
 
-    #Use CD's attempt at converting David Ciardi's code to python
-    #start from the selected center position
-    #contrast_curve = cca.ciardi_contrast(im, xcen, ycen, fwhm, plate_scale=plate_scale, outdir=outdir, verbose=verbose)
 
-    #Use current version of simmer
-    contrast_curve = sim_con_curve.contrast_curve_main(im, fwhm, inst, position=[xcen, ycen])
-    contrast_curve.to_csv(outdir+'contrast_curve.csv',index=False)
+        contrast_curve = sim_con_curve.contrast_curve_main(im, fwhm, inst, position=[xcen, ycen], highres=highres)
+        contrast_curve.to_csv(outdir+'contrast_curve'+highrestag+'.csv',index=False)
+
+        #Make a plot
+        plt.errorbar(contrast_curve.arcsec, contrast_curve.dmag, contrast_curve.dmrms)
+        plt.gca().invert_yaxis()
+        plt.xlabel('Separation (Arcseconds)')
+        plt.ylabel('Contrast (Magnitudes)')
+        plt.savefig(outdir+'contrast_curve'+highrestag+'.png',dpi=300)
+        plt.close()
 
     return im, xcen, ycen, fwhm, updated_sources, contrast_curve
 

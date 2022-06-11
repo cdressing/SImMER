@@ -37,7 +37,7 @@ import time as time
 warnings.simplefilter("ignore")
 
 
-def contrast_curve_main(data, fwhm, instrument, position=None):
+def contrast_curve_main(data, fwhm, instrument, position=None, highres=False):
     """
     Main code to run contrast curve analysis.
 
@@ -49,6 +49,9 @@ def contrast_curve_main(data, fwhm, instrument, position=None):
                       the plate scale used. ['PHARO' or 'ShARCS'].
         :position: (optional; 1D numpy.array, ints) pixel coordinates of target star.
         If None, target is assumed to be at image center.
+        :highres (Boolean): if set, make a higher-resolution contrast curve.
+                             This may be useful for follow-up analyses like vetting
+                             and validation with TRICERATOPS
 
     Outputs
     -------
@@ -67,8 +70,15 @@ def contrast_curve_main(data, fwhm, instrument, position=None):
     #set radius_size so that radius is no larger than 1"
     radius_size = np.min([1./plate_scale, fwhm])
 
+    #For high-resolution contrast curves, use smaller spacing (0.25")
+    if highres == True:
+        radius_size = np.min([radius_size, 0.25/plate_scale])
+        min_sep = 0.25/plate_scale
+    else:
+        min_sep = None
+
     contrast_result = contrast_curve_core(
-        data, plate_scale, fwhm=fwhm, radius_size=radius_size, center=position
+        data, plate_scale, fwhm=fwhm, radius_size=radius_size, min_sep=min_sep, center=position
     )
     separation = contrast_result[0]
     means = contrast_result[1]
@@ -84,7 +94,7 @@ def contrast_curve_main(data, fwhm, instrument, position=None):
     fake_ims = []
 
     #Use FWHM to set size of noise image
-    fsize = int(np.ceil(fwhm * 3 + 20)) #must be larger than maximum size needed for aperture photometry, which is 3 x FWHM + 15
+    fsize = int(np.ceil(2*(fwhm * 3 + 20))) #must be larger than maximum size needed for aperture photometry, which is half width = (3 x FWHM + 15)
     for i, (all_mean, all_std) in enumerate(zip(means, stds)):
         # initialize fake fluxes for a given annulus
         fake_im_fluxes_an = []
@@ -224,6 +234,7 @@ def contrast_curve_core(
     plate_scale,
     fwhm=1,
     radius_size=None,
+    min_sep=None,
     center=None,
 ):
     """
@@ -235,6 +246,10 @@ def contrast_curve_core(
         :fwhm: (float) full-width half-max of target [pixels]
         :radius_size: (float) width of annuli. [pixels]; defaults to FWHM if not set
         :center: (tuple) center of contrast curve computation.
+        ;min_sep: (float) minimum separation at which to compute contrast curve; defaults to FWHM
+                          might be set to other values to produce high-resolution contrast cuves
+                          like those needed for TRICERATOPS, which interpolates over contrast curves
+                          to assess the likelihood that transit events are due to undetected nearby stars
         :instrument: (str) PHARO or ShARCS.
     """
 
@@ -281,6 +296,10 @@ def contrast_curve_core(
 
     all_stds = [twoD_weighted_std(all_data[0], all_weights[0])]
 
+    ######## set inner edge of innermost annulus #######
+    if min_sep == None:
+        min_sep = fwhm
+
     ######## construct the apertures of the annuli #######
     sigma_clip = SigmaClip(sigma=3.0)
     bkgrms = StdBackgroundRMS(sigma_clip)
@@ -289,8 +308,8 @@ def contrast_curve_core(
     stds = np.zeros((number_of_a, len(pie_edges) - 1))
     seps = np.zeros(number_of_a)
     for j in range(int(number_of_a)):
-        r_in = j * radius_size + fwhm
-        r_out = j * radius_size + radius_size + fwhm
+        r_in = j * radius_size + min_sep
+        r_out = j * radius_size + radius_size + min_sep
         seps[j] = (r_in+r_out)/2.*plate_scale
 
         # terminate if completely outside 10 arcseconds
