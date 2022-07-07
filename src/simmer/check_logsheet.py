@@ -108,7 +108,18 @@ def check_logsheet(inst, log_name, tab=None, add_dark_times=False):
         except UnboundLocalError:
             print("Incorrect number of exposures for start and end exposure.")
             failed += 1
-        print(f"{9-failed}/9 logsheet checks passed.")
+        equal_exptime_fail = 0
+        for oo in np.arange(len(log_frame)):
+            this = log_frame.iloc[oo]
+            ww = np.where(np.logical_and(log_frame.Object == this.Object,
+                            log_frame.Filter == this.Filter))
+            if not len(set(log_frame.iloc[ww].ExpTime)) == 1:
+                print('Logsheet requests combination of images with different exposure times.')
+                print('Issue: ', this.Object, this.Filter, np.array(log_frame.iloc[ww].ExpTime))
+                equal_exptime_fail = 1
+        failed += equal_exptime_fail
+
+        print(f"{10-failed}/10 logsheet checks passed.")
         return failed
 
     failed = 0
