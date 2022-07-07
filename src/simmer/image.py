@@ -245,8 +245,10 @@ def create_imstack(
             output_verify="ignore",
         )
 
+    cube_vmin, cube_vmax = np.nanpercentile(im_array, [0.5,99.5])
+    print('shift1_cube plotting bounds: ', cube_vmin, cube_vmax)
     pl.plot_array(
-        "intermediate", im_array, -10.0, 10000.0, sf_dir, "shift1_cube.png",snames=original_fnames
+        "intermediate", im_array, cube_vmin, cube_vmax, sf_dir, "shift1_cube.png",snames=original_fnames
     )
 
     # write shifts to file

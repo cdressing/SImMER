@@ -55,7 +55,7 @@ def analyze(filename=filename, maxiter = 10, postol=1, fwhmtol = 0.5, inst = 'Sh
     original_sources = find_sources(im)
 
     #Find brightest peak
-    xcen, ycen = find_center(original_sources, verbose=verbose)
+    xcen, ycen = find_center(original_sources, xcen_guess = im.shape[0]/2., ycen_guess = im.shape[1]/2., verbose=verbose)
 
     #Determine FWHM using that center
     fwhm = find_FWHM(im, [xcen,ycen])
@@ -78,7 +78,7 @@ def analyze(filename=filename, maxiter = 10, postol=1, fwhmtol = 0.5, inst = 'Sh
             print(updated_sources)
 
         #Find brightest peak again using updated list of stars
-        updated_xcen, updated_ycen = find_center(updated_sources, verbose=verbose)
+        updated_xcen, updated_ycen = find_center(updated_sources, xcen_guess = xcen, ycen_guess = ycen, verbose=verbose)
 
         #Determine FWHM using that center
         updated_fwhm = find_FWHM(im, [updated_xcen,updated_ycen])
@@ -97,6 +97,12 @@ def analyze(filename=filename, maxiter = 10, postol=1, fwhmtol = 0.5, inst = 'Sh
         ycen = updated_ycen
         fwhm = updated_fwhm
         niter += 1
+
+    #Give up if needed
+    if updated_sources is None:
+        print('Source identification failed.')
+        return im, xcen, ycen, np.NaN, None, None
+        #      im, xcen, ycen, fwhm, updated_sources, contrast_curve
 
     #Save FWHM, center position to file
     d={'filename': filename, 'xcen': xcen, 'ycen': ycen, 'fwhm': fwhm}
@@ -160,6 +166,9 @@ def find_sources(im, sigma=5, fwhm=5, tscale=10, make_plot=False, verbose=False)
         apertures.plot(color='orange', lw=2.5);
         plt.close()
 
+    if sources == None:
+        return None
+
     #Convert sources to a dataframe
     df = sources.to_pandas()
     return df
@@ -192,11 +201,17 @@ def find_FWHM(image, center, min_fwhm = 2, verbose=False):
 
     return FWHM
 
-def find_center(df, verbose=False):
+def find_center(df, xcen_guess = 0, ycen_guess = 0, verbose=False):
     '''Returns coordinates of star with highest peak'''
-    ww = np.where(df['peak'] == np.max(df['peak']))
-    xcen = int(np.round(float(df.iloc[ww]['xcentroid'])))
-    ycen = int(np.round(float(df.iloc[ww]['ycentroid'])))
-    if verbose == True:
-        print('Closest pixels to center: ', xcen, ycen)
+    if df is not None:
+        ww = np.where(df['peak'] == np.max(df['peak']))
+        xcen = int(np.round(float(df.iloc[ww]['xcentroid'])))
+        ycen = int(np.round(float(df.iloc[ww]['ycentroid'])))
+        if verbose == True:
+            print('Closest pixels to center: ', xcen, ycen)
+    else:
+        if verbose == True:
+            print('Not a data frame. Returning input guess: ', xcen_guess, ycen_guess)
+        xcen = xcen_guess
+        ycen = ycen_guess
     return xcen, ycen
