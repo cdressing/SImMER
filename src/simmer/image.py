@@ -140,6 +140,8 @@ def image_driver(raw_dir, reddir, config, inst, sep_skies=False, plotting_yml=No
             create_imstack(
                 raw_dir, reddir, s_dir, imlist, inst, filter_name=filter_name
             )
+
+            print('Methods: ', methods)
     return methods
 
 
@@ -246,7 +248,6 @@ def create_imstack(
         )
 
     cube_vmin, cube_vmax = np.nanpercentile(im_array, [0.5,99.5])
-    print('shift1_cube plotting bounds: ', cube_vmin, cube_vmax)
     pl.plot_array(
         "intermediate", im_array, cube_vmin, cube_vmax, sf_dir, "shift1_cube.png",snames=original_fnames
     )
@@ -314,11 +315,13 @@ def create_im(s_dir, ssize1, plotting_yml=None, fdirs=None, method="default", ve
             image = interpolate_replace_nans(image, kernel)
 
             if method == "saturated":
+                print('using saturated')
                 image_centered, rot, newshifts1 = reg.register_saturated(
                     image, ssize1, newshifts1
                 )
                 rots[i, :, :] = rot
             elif method == "default":
+                print('using default')
                 image[image < 0.0] = 0.0
                 image_centered = reg.register_bruteforce(image)
                 if len(image_centered) == 0:
@@ -328,12 +331,14 @@ def create_im(s_dir, ssize1, plotting_yml=None, fdirs=None, method="default", ve
                     )
                     rots[i, :, :] = rot
             elif method == "saturated wide":
+                print('using saturated wide!')
                 rough_center = reg.find_wide_binary(image)
                 image_centered, rot, newshifts1 = reg.register_saturated(
                     image, ssize1, newshifts1, rough_center=rough_center
                 )
                 rots[i, :, :] = rot
             elif method == "wide":
+                print('using wide')
                 rough_center = reg.find_wide_binary(image)
                 image_centered = reg.register_bruteforce(
                     image, rough_center=rough_center

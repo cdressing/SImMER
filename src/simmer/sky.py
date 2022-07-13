@@ -152,7 +152,6 @@ def create_skies(
 
     #CDD change: use adaptive range for sky colorscaling (was -10,100)
     sky_vmin, sky_vmax = np.nanpercentile(sky_array, [1,99])
-    print('sky plotting bounds: ', sky_vmin, sky_vmax)
     pl.plot_array(
         "intermediate", sky_array, sky_vmin, sky_vmax, sf_dir, "sky_cube.png"
     )
