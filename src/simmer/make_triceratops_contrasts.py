@@ -21,7 +21,7 @@ verbose = False
 tridir = '/Users/courtney/Documents/data/toi_paper_data/contrast_curves_for_triceratops/'
 
 #Get list of final images
-namestr = '/Users/courtney/Documents/data/shaneAO/*/reduced*/*/*/contrast_curve.csv'
+namestr = '/Users/courtney/Documents/data/shaneAO/*/reduced*/*/*/contrast_curve_highres.csv'
 flist = glob.glob(namestr)
 
 print('Files: ', len(flist))
@@ -65,7 +65,7 @@ for ff in np.arange(len(flist)):
     tic = str(int(tic))
 
     #Set output file
-    outname = tic+'_'+filt+'_'+night+'_contrast_curve.csv'
+    outname = tic+'_'+filt+'_'+night+'_contrast_curve_highres.csv'
 
     #Read in the contrast curve
     c = pd.read_csv(file)
