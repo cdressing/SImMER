@@ -37,11 +37,15 @@ def image_grid(reddir):
     flist = glob.glob(reddir+'**/final_im.fits',recursive=True)
     flist.sort()
 
+    print('file list: ', flist)
+
     #Get the star names and filters used for each image
     snames, filts = get_star_filts(flist)
 
     #Produce a grid of images showing all stars and filters
     im_array = u.read_imcube(flist)
+
+    print('im_array.shape', im_array.shape)
 
     npix=50 # number of pixels to show
     lo=int((600-npix)/2.)
@@ -52,7 +56,7 @@ def image_grid(reddir):
 def nightly_contrast_curve(reddir):
     #produce a plot showing all contrast curves
     #get list of all contrast curves
-    #Contrast curves aren't made automatically, so they might not be available. 
+    #Contrast curves aren't made automatically, so they might not be available.
     flist = glob.glob(reddir+'**/contrast_curve.csv',recursive=True)
     flist.sort()
 

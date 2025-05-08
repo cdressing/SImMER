@@ -17,7 +17,7 @@ from . import summarize as summarize
 
 def all_driver(
 
-    inst, config_file, raw_dir, reddir, sep_skies = False, plotting_yml=None, searchsize=10, just_images=False, selected_stars=None, verbose=False
+    inst, config_file, raw_dir, reddir, sep_skies = False, plotting_yml=None, searchsize=10, max_shift = 400, just_images=False, selected_stars=None, selected_method=None, verbose=False
 
 ):
     """
@@ -32,6 +32,7 @@ def all_driver(
         :sep_skies: (Boolean) if true, skies for observations of star STAR are recorded with Object = "STAR sky". If false, observations were taken using a dither pattern and can be used as the skies.
         :plotting_yml: (string) path to the plotting configuration file.
         :selected_stars: (array of strings; OPTIONAL) list of stars to reduce
+        :max_shift: maximum amount (in pixels) that images can shift during registration
     """
     #check if desired reddir exists and create it if needed
     if os.path.isdir(reddir) == False:
@@ -54,7 +55,7 @@ def all_driver(
         darks.dark_driver(raw_dir, reddir, config, inst)
         flats.flat_driver(raw_dir, reddir, config, inst)
         sky.sky_driver(raw_dir, reddir, config, inst, sep_skies=sep_skies)
-    methods = image.image_driver(raw_dir, reddir, config, inst, sep_skies=sep_skies, selected_stars = selected_stars, verbose=verbose)
+    methods = image.image_driver(raw_dir, reddir, config, inst, max_shift=max_shift, sep_skies=sep_skies, selected_stars = selected_stars, verbose=verbose)
 
 
     star_dirlist = glob(reddir + "*/")
@@ -80,7 +81,10 @@ def all_driver(
         if selected_stars != None:
             thisstar = os.path.basename(s_dir[:-1])
             print('this star: ', thisstar)
-            use_method = 'saturated' #workaround for now; would be better to do something like methods[miter]
+            if selected_method != None:
+                use_method = selected_method
+            else:
+                use_method = 'saturated'
             miter += 1
             if thisstar not in selected_stars:
                 print('Star ', thisstar, 'not in selected list of stars (', selected_stars, ')')
@@ -110,7 +114,7 @@ def all_driver(
     """
 
 
-def image_driver(inst, config_file, raw_dir, reddir):
+def image_driver(inst, config_file, raw_dir, reddir, max_shift=400):
     """
     Runs all_drivers, terminating after running image_drivers.
 
@@ -119,13 +123,14 @@ def image_driver(inst, config_file, raw_dir, reddir):
         :config_file: (string) path of the config file.
         :raw_dir: (string) path of the directory containing the raw data.
         :reddir: (string) path of the directory to contain the raw data.
+        :max_shift: maximum amount (in pixels) that images can shift during registration
     """
 
     # get file list from config file
     config = pd.read_csv(config_file)
     config.Object = config.Object.astype(str)
 
-    image.image_driver(raw_dir, reddir, config, inst)
+    image.image_driver(raw_dir, reddir, config, inst, max_shift=max_shift)
 
     # Now do registration
     star_dirlist = glob(reddir + "*/")

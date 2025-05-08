@@ -49,9 +49,10 @@ def read_imcube(filelist):
         :im_array: (3D array) array of 2D arrays pertaining to the files in filelist.
 
     """
-
+    print('reading files: ', filelist)
+    print('number of files: ', len(filelist))
     im_array = np.array([pyfits.getdata(file, 0) for file in filelist])
-
+    print(im_array.shape, im_array.shape)
     return im_array
 
 

@@ -9,9 +9,11 @@ from scipy.ndimage.filters import median_filter
 from scipy.ndimage.interpolation import rotate
 from scipy.ndimage.interpolation import shift as subpix_shift
 from skimage.feature import peak_local_max
+from astropy.visualization import LogStretch, ImageNormalize
+
+import astropy.io.fits as pyfits
 
 from .scipy_utils import *
-
 
 def roll_shift(image, shifts, cval=0.0):
     """
@@ -156,7 +158,12 @@ def find_wide_binary(image):
 
     fig = plt.figure(1)
     ax = fig.add_subplot(111)
-    ax.imshow(image)
+
+    #show image on logarithmic scaled
+    vmin, vmax = np.percentile(image, [0.5,99.5])
+    norm = ImageNormalize(vmin=vmin, vmax=vmax)#,vmin=0,vmax=100)
+
+    ax.imshow(image,cmap='Greys', origin='lower', norm=norm, interpolation='nearest')
 
     cid = fig.canvas.mpl_connect("button_press_event", onclick)
 
@@ -170,11 +177,13 @@ def find_wide_binary(image):
             move to the command line/Python interpreter."
         )
 
+    print('selected rough center: ', rough_center)
+
     # cast as integers for later slicing
     return np.round(rough_center[0]).astype(int)
 
 
-def register_saturated(image, searchsize1, newshifts1, rough_center=None):
+def register_saturated(image, searchsize1, newshifts1, rough_center=None, tag=''):
 
     """
     Performs image registration when a saturated star is present in
@@ -196,11 +205,16 @@ def register_saturated(image, searchsize1, newshifts1, rough_center=None):
     cent = (im_shape[0] / 2, im_shape[1] / 2)
     if rough_center is not None:
         zoomed_image = zoom_image(image, rough_center)
+        zoomed_image_shape = np.shape(zoomed_image)
+        zoom_cent = (zoomed_image_shape[0] / 2, zoomed_image_shape[1] / 2)
         res1, im1, (xshift1, yshift1) = run_rot(
-            zoomed_image, searchsize1, cent, 200
+            zoomed_image, searchsize1, zoom_cent, np.max(np.shape(zoomed_image))
         )
-        xshift1 += rough_center[1]
-        yshift1 += rough_center[0]
+        print('before adjustment xshift1, yxhift1: ', xshift1, yshift1)
+        #Fixed sign error here (was +=)
+        xshift1 -= (rough_center[1] - cent[1]) #add offset between star location and image center
+        yshift1 -= (rough_center[0] - cent[0]) #add offset between star location and image center
+        print('after adjustment xshift1, yxhift1: ', xshift1, yshift1)
     else:
         res1, im1, (xshift1, yshift1) = run_rot(image, searchsize1, cent, 200)
     if np.max(res1) == 0:
@@ -210,6 +224,9 @@ def register_saturated(image, searchsize1, newshifts1, rough_center=None):
         rot = res1 / np.max(res1)
     newshifts1.append((yshift1, xshift1))
     image_centered = subpix_shift(image, (yshift1, xshift1))
+
+
+
     return image_centered, rot, newshifts1
 
 
@@ -338,7 +355,8 @@ def calc_shifts(
 
     return (xshift, yshift), out
 
-
+#max_shift was 200, but that was causing issues for images in which the target star was placed too close to the edge of the frame
+#max_shift = 400 works for most targets; changed to 200 for 274122380
 def shift_bruteforce(image, base_position=None, max_shift=200, verbose=False):
     """This will shift the maximum pixel to base_position (i.e. the center of image).
     Make sure base_position is entered as (int,int).
@@ -374,8 +392,8 @@ def shift_bruteforce(image, base_position=None, max_shift=200, verbose=False):
     maxpix = np.unravel_index(np.nanargmax(filtered), filtered.shape)
 
     # Now shift that location to the center (or base_position)
-    print('base position: ', base_position)
-    print('maxpix: ', maxpix)
+#    print('base position: ', base_position)
+#    print('maxpix: ', maxpix)
     yshift = base_position[0] - maxpix[0]
     xshift = base_position[1] - maxpix[1]
 

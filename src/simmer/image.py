@@ -12,6 +12,8 @@ import pandas as pd
 from tqdm import tqdm
 from astropy.convolution import Gaussian2DKernel, interpolate_replace_nans
 
+import matplotlib.pyplot as plt
+
 from . import plotting as pl
 from . import registration as reg
 from . import utils as u
@@ -47,7 +49,7 @@ def open_flats(flatfile):
         return flat
 
 
-def image_driver(raw_dir, reddir, config, inst, sep_skies=False, plotting_yml=None, selected_stars = None, verbose=False):
+def image_driver(raw_dir, reddir, config, inst, max_shift=400, sep_skies=False, plotting_yml=None, selected_stars = None, verbose=False):
     """Do flat division, sky subtraction, and initial alignment via coords in header.
     Returns Python list of each registration method used per star.
 
@@ -58,6 +60,7 @@ def image_driver(raw_dir, reddir, config, inst, sep_skies=False, plotting_yml=No
         :inst: (Instrument object) instrument for which data is being reduced.
         :plotting_yml: (string) path to the plotting configuration file.
         :selected_stars: (array of strings; OPTIONAL) list of stars to reduce
+        :max_shift: maximum amount (in pixels) that images can shift during registration
     """
     # Save these images to the appropriate folder.
 
@@ -138,7 +141,7 @@ def image_driver(raw_dir, reddir, config, inst, sep_skies=False, plotting_yml=No
                     methods.append("wide")
 
             create_imstack(
-                raw_dir, reddir, s_dir, imlist, inst, filter_name=filter_name
+                raw_dir, reddir, s_dir, imlist, inst, filter_name=filter_name, max_shift=max_shift
             )
 
             print('Methods: ', methods)
@@ -146,7 +149,7 @@ def image_driver(raw_dir, reddir, config, inst, sep_skies=False, plotting_yml=No
 
 
 def create_imstack(
-    raw_dir, reddir, s_dir, imlist, inst, plotting_yml=None, filter_name=None
+    raw_dir, reddir, s_dir, imlist, inst, plotting_yml=None, filter_name=None, max_shift=400
 ):
     """Create the stack of images by performing flat division, sky subtraction.
 
@@ -158,6 +161,7 @@ def create_imstack(
         :inst: (Instrument object) instrument for which data is being reduced.
         :plot: (bool) determines whether or not intermediate plots should be produced.
         :filter_name: (string) name of the filter used for the images in question.
+        :max_shift: maximum amount (in pixels) that images can shift during registration
 
     Outputs:
         :im_array: (3d array) array of 2d images.
@@ -224,18 +228,38 @@ def create_imstack(
         # flat division and sky subtraction
         current_im = im_array[i, :, :]
         flat[flat == 0] = np.nan
+        flatfielded = current_im/flat
         current_im = (
-            current_im / flat
+            flatfielded
         ) - sky  # where flat = 0, this will be nan
+
         current_head = pyfits.getheader(imfiles[i])
 
         # bad pixel correction
         current_im = inst.bad_pix(current_im)
 
+        #Save flat-fielded image (before sky subtraction)
+        hdu = pyfits.PrimaryHDU(flatfielded, header=current_head)
+        hdu.writeto(
+            sf_dir + "ff{:02d}.fits".format(i),
+            overwrite=True,
+            output_verify="ignore",
+        )
+
+        #Save flat-fielded, sky-subtracted image
+        hdu = pyfits.PrimaryHDU(current_im, header=current_head)
+        hdu.writeto(
+            sf_dir + "fd{:02d}.fits".format(i),
+            overwrite=True,
+            output_verify="ignore",
+        )
+
         # now deal with headers and shifts
         shifted_im, shifts = reg.shift_bruteforce(
-            current_im
-        )  # put it at the center
+            current_im,
+            max_shift=max_shift
+        )  # put star at the center
+        print('applied shift: ', shifts)
 
         shifts_all.append(shifts)
 
@@ -333,9 +357,14 @@ def create_im(s_dir, ssize1, plotting_yml=None, fdirs=None, method="default", ve
             elif method == "saturated wide":
                 print('using saturated wide!')
                 rough_center = reg.find_wide_binary(image)
+                print('file: ', files[i])
+                print('found rough center: ', rough_center)
+                print('search size: ', ssize1)
+                print('*******')
                 image_centered, rot, newshifts1 = reg.register_saturated(
-                    image, ssize1, newshifts1, rough_center=rough_center
+                    image, ssize1, newshifts1, rough_center=rough_center, tag = '_'+str(i)
                 )
+
                 rots[i, :, :] = rot
             elif method == "wide":
                 print('using wide')
@@ -345,7 +374,29 @@ def create_im(s_dir, ssize1, plotting_yml=None, fdirs=None, method="default", ve
                 )
             frames[i, :, :] = image_centered  # newimage
 
+            #For debugging
+            hdu = pyfits.PrimaryHDU(image_centered)
+            hdu.writeto(
+                sf_dir + "centered_im_"+str(i)+".fits", overwrite=True, output_verify="ignore"
+            )
+            #End debugging
+
+        #Did something happen to the frames?
+        for jj in range(nims):
+            hdu = pyfits.PrimaryHDU(frames[jj,:,:])
+            hdu.writeto(
+                sf_dir + "centered_im_comp_"+str(jj)+".fits", overwrite=True, output_verify="ignore"
+            )
+
         final_im = np.nanmedian(frames, axis=0)
+        print(final_im.shape)
+
+        #Save large final image
+        head = pyfits.getheader(files[0])
+        hdu = pyfits.PrimaryHDU(final_im, header=head)
+        hdu.writeto(
+            sf_dir + "final_im_large.fits", overwrite=True, output_verify="ignore"
+            )
 
         #Trim down to smaller final size
         cutsize = 600 #desired axis length of final cutout image
@@ -358,7 +409,7 @@ def create_im(s_dir, ssize1, plotting_yml=None, fdirs=None, method="default", ve
             print('Current image dimensions: ', final_im.shape)
             print('Desired cuts: ', astart, aend, bstart, bend)
         else:
-            final_im = final_im[astart:astart+cutsize,bstart:bstart+cutsize] #extract central cutsize x cutsize pixel region from larger image
+            final_im = final_im[astart:aend+cutsize,bstart:bend] #extract central cutsize x cutsize pixel region from larger image
 
         head = pyfits.getheader(files[0])
         hdu = pyfits.PrimaryHDU(final_im, header=head)
@@ -389,3 +440,15 @@ def create_im(s_dir, ssize1, plotting_yml=None, fdirs=None, method="default", ve
         pl.plot_array(
             "intermediate", frames, frames_vmin, frames_vmax, sf_dir, "centers.png"
         )
+
+        #Seriously, did something happen to the frames?
+        for jj in range(nims):
+            hdu = pyfits.PrimaryHDU(frames[jj,:,:])
+            hdu.writeto(
+            sf_dir + "centered_im_again_"+str(jj)+".fits", overwrite=True, output_verify="ignore"
+                )
+
+            plt.figure()
+            plt.imshow(frames[jj,:,:],vmin=frames_vmin, vmax=frames_vmax)
+            plt.savefig(sf_dir+'centered_im_again'+str(jj)+'.png',dpi=300)
+            plt.close()

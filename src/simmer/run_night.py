@@ -12,8 +12,9 @@ import simmer.check_logsheet as check
 import simmer.add_dark_exp as ad
 import simmer.create_config as config
 
-def run_night(wantdate, add_darks=True, just_images=False, sep_skies=False,  skip_reduction=False, selected_stars=None, verbose=False):
+def run_night(wantdate, max_shift = 400, add_darks=True, just_images=False, sep_skies=False,  skip_reduction=False, selected_stars=None, selected_method=None, verbose=False):
     #wantdate = desired night to reduce. Format is 'YYYY-MM-DD' (e.g., '2019-09-13')
+    #max_shift: maximum amount (in pixels) that images can shift during registration
 
     #Change these for your local installation
     basedir = '/Users/courtney/Documents/data/shaneAO/' #parent directory for data directories
@@ -61,4 +62,4 @@ def run_night(wantdate, add_darks=True, just_images=False, sep_skies=False,  ski
         print('files exist')
         return config_file
     else:
-        drivers.all_driver(inst, config_file, rawdir, reddir, just_images=just_images, sep_skies=sep_skies, selected_stars=selected_stars, verbose=verbose)
+        drivers.all_driver(inst, config_file, rawdir, reddir, max_shift = max_shift, just_images=just_images, sep_skies=sep_skies, selected_stars=selected_stars, selected_method=selected_method, verbose=verbose)

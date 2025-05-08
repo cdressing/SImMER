@@ -80,6 +80,7 @@ def add_dark_exp(inst, log, raw_dir, tab=None):
             writer.save()
             writer.close()
 
+
         else:
             #Save log with darks to a new file so that we don't end up adding
             #darks over and over if we rerun the pipeline
@@ -88,7 +89,8 @@ def add_dark_exp(inst, log, raw_dir, tab=None):
             current_log = pd.read_csv(log)
 
             #add the darks to the end of the data frame
-            full_log = current_log.append(dark_log, ignore_index=True)
+            print(current_log.columns.values)
+            full_log = pd.concat([current_log, dark_log])
             full_log.to_csv(outlog, index=False, header=True)
         return outlog
 

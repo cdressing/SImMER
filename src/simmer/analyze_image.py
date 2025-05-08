@@ -7,11 +7,13 @@ and determine magnitude ratios between companions and target star.
 
 # CDD
 # Created: 5/6/22
-# Updated: 5/9/22
+# Updated: 7/8/24
 
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import os as os
+import glob as glob
 
 #learning how to detect stars using astropy
 from astropy.stats import sigma_clipped_stats
@@ -24,22 +26,12 @@ from photutils.aperture import aperture_photometry
 from astropy.stats import SigmaClip
 from astropy.io import fits
 
+
 import time as time
 
 import simmer.contrast as sim_con_curve
 
-#Test file
-startname = '/Users/courtney/Documents/data/shaneAO/data-'
-datestr = '2019-07-19'
-midname = '-AO-Courtney.Dressing/reduced_'
-starname = 'T294301883'
-filt = 'J'
-endname = '/final_im.fits'
-
-filename = startname + datestr + midname + datestr + '/'+starname+'/'+filt+endname
-outdir = startname + datestr + midname + datestr + '/'+starname+'/'+filt+'/'
-
-def analyze(filename=filename, maxiter = 10, postol=1, fwhmtol = 0.5, inst = 'ShARCS', outdir='', verbose=True):
+def analyze(filename='filename', maxiter = 10, postol=1, fwhmtol = 0.5, inst = 'ShARCS', outdir='', verbose=True):
 
     #set defaults
     if inst == 'PHARO':
@@ -51,66 +43,78 @@ def analyze(filename=filename, maxiter = 10, postol=1, fwhmtol = 0.5, inst = 'Sh
     #open the image and load the data
     im = fits.getdata(filename, ext=0)
 
+
     #Find target source using rough guesses about image properties
     original_sources = find_sources(im)
 
     #Find brightest peak
     xcen, ycen = find_center(original_sources, xcen_guess = im.shape[0]/2., ycen_guess = im.shape[1]/2., verbose=verbose)
 
+    print('found center: ', xcen, ycen)
+
     #Determine FWHM using that center
     fwhm = find_FWHM(im, [xcen,ycen])
     if verbose == True:
         print('Estimated FWHM: ', fwhm)
 
-    #Iterate until coordinates and FWHM agree to within tolerance
-    #or until maximum number of iterations is reached
-    posdiff = 5
-    fwhmdiff = 2
-    niter = 1
-    while np.logical_and(niter < maxiter, np.logical_or(posdiff > postol, fwhmdiff > fwhmtol)):
-        if verbose == True:
-            print('Beginning iteration ', niter)
+    #put in for J band TIC0233633993 05/30/21 (image not used because reobserved in June in better conditions)
+    maxfwhm = 100.
+    if fwhm > maxfwhm:
+        fwhm = np.min([fwhm,maxfwhm])
+        print('using maximum FWHM: ', maxfwhm)
 
-        #Find sources again
-        updated_sources = find_sources(im, fwhm=fwhm)
-        if verbose == True:
-            print('Updated sources')
-            print(updated_sources)
+    #Default is to skip search for companion stars
+    updated_sources=0
+    if 5 < 2:
+        #Iterate until coordinates and FWHM agree to within tolerance
+        #or until maximum number of iterations is reached
+        posdiff = 5
+        fwhmdiff = 2
+        niter = 1
+        while np.logical_and(niter < maxiter, np.logical_or(posdiff > postol, fwhmdiff > fwhmtol)):
+            if verbose == True:
+                print('Beginning iteration ', niter)
 
-        #Find brightest peak again using updated list of stars
-        updated_xcen, updated_ycen = find_center(updated_sources, xcen_guess = xcen, ycen_guess = ycen, verbose=verbose)
+            #Find sources again
+            updated_sources = find_sources(im, fwhm=fwhm)
+            if verbose == True:
+                print('Updated sources')
+                print(updated_sources)
 
-        #Determine FWHM using that center
-        updated_fwhm = find_FWHM(im, [updated_xcen,updated_ycen])
-        if verbose == True:
-            print('Estimated FWHM: ', updated_fwhm)
+            #Find brightest peak again using updated list of stars
+            updated_xcen, updated_ycen = find_center(updated_sources, xcen_guess = xcen, ycen_guess = ycen, verbose=verbose)
 
-        #Compute differences
-        posdiff = np.sqrt((updated_xcen - xcen)**2. + (updated_ycen - ycen)**2.)
-        fwhmdiff = np.sqrt((updated_fwhm - fwhm)**2.)
-        if verbose == True:
-            print('Current posdiff: ', posdiff)
-            print('Current fwhmdiff: ', fwhmdiff)
+            #Determine FWHM using that center
+            updated_fwhm = find_FWHM(im, [updated_xcen,updated_ycen])
+            if verbose == True:
+                print('Estimated FWHM: ', updated_fwhm)
 
-        #Update reference values
-        xcen = updated_xcen
-        ycen = updated_ycen
-        fwhm = updated_fwhm
-        niter += 1
+            #Compute differences
+            posdiff = np.sqrt((updated_xcen - xcen)**2. + (updated_ycen - ycen)**2.)
+            fwhmdiff = np.sqrt((updated_fwhm - fwhm)**2.)
+            if verbose == True:
+                print('Current posdiff: ', posdiff)
+                print('Current fwhmdiff: ', fwhmdiff)
 
-    #Give up if needed
-    if updated_sources is None:
-        print('Source identification failed.')
-        return im, xcen, ycen, np.NaN, None, None
-        #      im, xcen, ycen, fwhm, updated_sources, contrast_curve
+            #Update reference values
+            xcen = updated_xcen
+            ycen = updated_ycen
+            fwhm = updated_fwhm
+            niter += 1
 
-    #Save FWHM, center position to file
-    d={'filename': filename, 'xcen': xcen, 'ycen': ycen, 'fwhm': fwhm}
-    key_details = pd.DataFrame(data=d,index=[0])
-    key_details.to_csv(outdir+'key_details.csv', index=False)
+        #Give up if needed
+        if updated_sources is None:
+            print('Source identification failed.')
+            return im, xcen, ycen, np.NaN, None, None
+            #      im, xcen, ycen, fwhm, updated_sources, contrast_curve
 
-    #Save sources to file
-    updated_sources.to_csv(outdir+'detected_stars.csv', index=False)
+        #Save FWHM, center position to file
+        d={'filename': filename, 'xcen': xcen, 'ycen': ycen, 'fwhm': fwhm}
+        key_details = pd.DataFrame(data=d,index=[0])
+        key_details.to_csv(outdir+'key_details.csv', index=False)
+
+        #Save sources to file
+        updated_sources.to_csv(outdir+'detected_stars.csv', index=False)
 
     #Make contrast curve (both regular & highres)
     for hh in np.arange(2):
@@ -124,6 +128,8 @@ def analyze(filename=filename, maxiter = 10, postol=1, fwhmtol = 0.5, inst = 'Sh
 
         contrast_curve = sim_con_curve.contrast_curve_main(im, fwhm, inst, position=[xcen, ycen], highres=highres)
         contrast_curve.to_csv(outdir+'contrast_curve'+highrestag+'.csv',index=False)
+        print('saved contrast curve to: ', outdir+'contrast_curve'+highrestag+'.csv')
+        print('saved contrast curve plot to :', outdir+'contrast_curve'+highrestag+'.png')
 
         #Make a plot
         plt.errorbar(contrast_curve.arcsec, contrast_curve.dmag, contrast_curve.dmrms)
@@ -215,3 +221,35 @@ def find_center(df, xcen_guess = 0, ycen_guess = 0, verbose=False):
         xcen = xcen_guess
         ycen = ycen_guess
     return xcen, ycen
+
+#Test with a single file
+if 3 < 2:
+    startname = '/Users/courtney/Documents/data/shaneAO/data-'
+    datestr = '2021-03-29'
+    midname = '-AO-Courtney.Dressing/reduced_'
+    starname = 'TIC0148883384'
+    filt = 'J'
+    endname = '/final_im.fits'
+
+    filename = startname + datestr + midname + datestr + '/'+starname+'/'+filt+endname
+#    outdir = startname + datestr + midname + datestr + '/'+starname+'/'+filt+'/'
+    print('filename: ', filename)
+    flist = [filename]
+
+#Analyze ALL images
+if 3 < 4:
+    #Get list of final images
+    namestr = '/Users/courtney/Documents/data/shaneAO/*/reduced*/*/*/final_im.fits'
+    flist = glob.glob(namestr)
+
+    print('Files: ', len(flist))
+
+for ff in np.arange(len(flist)):
+    filename = flist[ff]
+    print(flist[ff])
+    print(filename)
+    outdir = os.path.dirname(filename)+'/'
+    print(ff, ': ', outdir)
+
+    print('working on : ', filename)
+    im, xcen, ycen, fwhm, updated_sources, contrast_curve = analyze(filename, outdir=outdir)

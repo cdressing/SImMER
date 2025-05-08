@@ -155,7 +155,7 @@ def plot_array(
                 origin="lower",
                 cmap="plasma",
                 norm=co.Normalize(vmin=vmin, vmax=vmax),
-                extent=extent,
+                #extent=extent,
             )
             if snames:
                 ax.set_xlabel(snames[i], fontsize=25)
